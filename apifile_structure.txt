@@ -1,0 +1,73 @@
+cobas_analytics/
+│
+├── api/
+│   │
+│   ├── __init__.py
+│   ├── main.py                      # FastAPI entry point
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py                # Settings / environment
+│   │   └── dependencies.py          # Shared dependencies
+│   │
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── session.py               # SQLAlchemy engine & SessionLocal
+│   │   ├── base.py                  # Declarative Base
+│   │   └── models.py                # ORM models
+│   │
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   │
+│   │   ├── patient.py
+│   │   ├── qc.py
+│   │   ├── calibration.py
+│   │   ├── archive.py
+│   │   ├── analyte.py
+│   │   ├── dashboard.py
+│   │   ├── actg.py
+│   │   └── system.py
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── base_service.py
+│   │   ├── patient_service.py
+│   │   ├── dashboard_service.py
+│   │   ├── qc_service.py
+│   │   ├── calibration_service.py
+│   │   ├── archive_service.py
+│   │   ├── analyte_service.py
+│   │   ├── actg_service.py
+│   │   └── system_service.py
+│   │
+│   └── routers/
+│       ├── __init__.py
+│       ├── patients.py
+│       ├── dashboard.py
+│       ├── qc.py
+│       ├── calibrations.py
+│       ├── archive.py
+│       ├── analytes.py
+│       ├── actg.py
+│       └── system.py
+│
+├── parser/
+│   ├── archive_parser.py
+│   ├── normalizer.py
+│   ├── archive_writer.py
+│   └── ...
+│
+├── ui/
+│   ├── app.py
+│   ├── windows/
+│   ├── widgets/
+│   └── resources/
+│
+├── archive/
+│   ├── incoming/
+│   ├── processed/
+│   └── failed/
+│
+├── config.py
+├── requirements.txt
+└── README.md
