@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Archive imports
+archive/incoming/*
+archive/processed/*
+archive/failed/*
+
+# Compiled
+build/
+dist/
+
+# Environment
+.env
+
+# pytest
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/

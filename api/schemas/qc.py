@@ -1,0 +1,16 @@
+class QCService:
+
+    def get_by_date(self, db, target_date):
+        ...
+
+    def get_by_analyte(self, db, analyte):
+        ...
+
+    def get_summary(self, db):
+        ...
+
+    def get_compliance(self, db, target_date):
+        ...
+
+    def get_missing(self, db, target_date):
+        ...
