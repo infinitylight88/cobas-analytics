@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jcRC Chemistry Lab — CQI Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <style>
+    [x-cloak] { display: none !important; }
+    .tab-active { @apply border-b-2 border-blue-600 text-blue-700 font-semibold; }
+    .z-ok    { background:#d1fae5; color:#065f46; }
+    .z-warn  { background:#fef3c7; color:#92400e; }
+    .z-fail  { background:#fee2e2; color:#991b1b; }
+    .badge-pass { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
+    .badge-fail { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+    .badge-na   { background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; }
+    thead { position: sticky; top: 0; z-index: 10; }
+    .table-wrap { max-height: 420px; overflow-y: auto; }
+    .chart-box  { position: relative; height: 280px; }
+    .stat-card  { background:white; border-radius:.75rem; box-shadow:0 1px 4px rgba(0,0,0,.08); padding:1.25rem 1.5rem; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; }
+    @media print {
+      nav, .no-print { display:none!important; }
+      .print-full { width:100%!important; max-height:none!important; overflow:visible!important; }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800" x-data="dashboard()" x-init="init()" x-cloak>
+
+<!-- ── TOP BAR ─────────────────────────────────────────────── -->
+<header class="bg-blue-900 text-white shadow-lg">
+  <div class="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <i class="fa-solid fa-flask-vial text-blue-300 text-2xl"></i>
+      <div>
+        <div class="font-bold text-lg leading-tight">jcRC Chemistry Lab</div>
+        <div class="text-blue-300 text-xs">CQI &amp; Quality Control Analytics · Cobas Integra 400 Plus</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-sm">
+      <span class="flex items-center gap-1 text-green-300">
+        <span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Live
+      </span>
+      <span class="text-blue-200" x-text="currentTime"></span>
+    </div>
+  </div>
+</header>
+
+<!-- ── TAB NAV ─────────────────────────────────────────────── -->
+<nav class="bg-white border-b border-gray-200 shadow-sm no-print">
+  <div class="max-w-screen-xl mx-auto px-4 flex gap-0 overflow-x-auto">
+    <template x-for="t in tabs" :key="t.id">
+      <button
+        @click="switchTab(t.id)"
+        :class="tab===t.id ? 'border-b-2 border-blue-600 text-blue-700 font-semibold' : 'text-gray-600 hover:text-blue-600'"
+        class="px-4 py-3 text-sm whitespace-nowrap flex items-center gap-2 transition-colors">
+        <i :class="t.icon"></i>
+        <span x-text="t.label"></span>
+      </button>
+    </template>
+  </div>
+</nav>
+
+<!-- ── CONTENT ─────────────────────────────────────────────── -->
+<main class="max-w-screen-xl mx-auto px-4 py-6">
+
+  <!-- LOADING OVERLAY -->
+  <div x-show="globalLoading" class="fixed inset-0 bg-white bg-opacity-60 flex items-center justify-center z-50">
+    <div class="text-center text-blue-800">
+      <i class="fa-solid fa-spinner fa-spin text-4xl mb-2"></i>
+      <div class="text-sm font-medium">Loading…</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 1 — OVERVIEW
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='overview'">
+    <h2 class="text-xl font-bold text-gray-700 mb-4">Lab Overview</h2>
+
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="stat-card">
+        <div class="text-3xl font-bold text-blue-700" x-text="(summary.patients||0).toLocaleString()"></div>
+        <div class="text-sm text-gray-500 mt-1"><i class="fa-solid fa-vial mr-1"></i> Patient Tests</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-3xl font-bold text-emerald-600" x-text="(summary.qc||0).toLocaleString()"></div>
+        <div class="text-sm text-gray-500 mt-1"><i class="fa-solid fa-circle-check mr-1"></i> QC Runs</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-3xl font-bold text-purple-600" x-text="(summary.calibrations||0).toLocaleString()"></div>
+        <div class="text-sm text-gray-500 mt-1"><i class="fa-solid fa-sliders mr-1"></i> Calibrations</div>
+      </div>
+      <div class="stat-card">
+        <div class="text-3xl font-bold text-amber-500" x-text="summary.archives||0"></div>
+        <div class="text-sm text-gray-500 mt-1"><i class="fa-solid fa-box-archive mr-1"></i> Archives Loaded</div>
+      </div>
+    </div>
+
+    <!-- Activity Chart + QC Stats -->
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-white rounded-xl shadow p-4">
+        <h3 class="font-semibold text-gray-700 mb-3"><i class="fa-solid fa-chart-bar text-blue-500 mr-2"></i>Daily Activity (All Tests)</h3>
+        <div class="chart-box"><canvas id="activityChart"></canvas></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <h3 class="font-semibold text-gray-700 mb-3"><i class="fa-solid fa-chart-line text-purple-500 mr-2"></i>QC Statistics — CV% by Analyte</h3>
+        <div class="table-wrap">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="text-left px-3 py-2">Analyte</th>
+                <th class="text-left px-3 py-2">Control</th>
+                <th class="text-right px-3 py-2">n</th>
+                <th class="text-right px-3 py-2">Mean</th>
+                <th class="text-right px-3 py-2">SD</th>
+                <th class="text-right px-3 py-2">CV%</th>
+                <th class="text-right px-3 py-2">Bias%</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in qcStats" :key="r.analyte_code+r.control_name">
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                  <td class="px-3 py-1.5 font-mono font-semibold" x-text="r.analyte_code"></td>
+                  <td class="px-3 py-1.5 text-gray-600" x-text="r.control_name"></td>
+                  <td class="px-3 py-1.5 text-right" x-text="r.n"></td>
+                  <td class="px-3 py-1.5 text-right" x-text="fmt2(r.mean_measured)"></td>
+                  <td class="px-3 py-1.5 text-right" x-text="fmt2(r.sd_measured)"></td>
+                  <td class="px-3 py-1.5 text-right font-semibold"
+                      :class="r.cv_pct > 10 ? 'text-red-600' : r.cv_pct > 5 ? 'text-amber-600' : 'text-green-700'"
+                      x-text="fmt2(r.cv_pct) + '%'"></td>
+                  <td class="px-3 py-1.5 text-right" x-text="fmt2(r.bias_pct) + '%'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Workload -->
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-semibold text-gray-700 mb-3"><i class="fa-solid fa-calendar text-emerald-500 mr-2"></i>Monthly Workload Summary</h3>
+      <div class="table-wrap">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="text-left px-4 py-2">Month</th>
+              <th class="text-right px-4 py-2">Unique Patients</th>
+              <th class="text-right px-4 py-2">Unique Samples</th>
+              <th class="text-right px-4 py-2">Total Tests</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in monthlyWorkload" :key="r.month">
+              <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="px-4 py-2 font-semibold" x-text="r.month"></td>
+                <td class="px-4 py-2 text-right" x-text="r.unique_patients"></td>
+                <td class="px-4 py-2 text-right" x-text="r.unique_samples"></td>
+                <td class="px-4 py-2 text-right font-bold text-blue-700" x-text="r.total_results.toLocaleString()"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /overview -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 2 — DAILY QC CONTROLS
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='qc'">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-microscope text-emerald-600 mr-2"></i>Daily QC Controls</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        <input type="date" x-model="qcDate" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+        <button @click="loadQCDay()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+          <i class="fa-solid fa-magnifying-glass mr-1"></i> Load
+        </button>
+        <a href="/qc/export" target="_blank"
+           class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+          <i class="fa-solid fa-file-excel mr-1"></i> Export QC Excel
+        </a>
+        <button @click="window.print()" class="border border-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition">
+          <i class="fa-solid fa-print mr-1"></i> Print
+        </button>
+      </div>
+    </div>
+
+    <!-- QC Status Banner -->
+    <div x-show="qcAuditDay" class="mb-4 p-3 rounded-lg flex flex-wrap items-center gap-3 border"
+         :class="qcAuditDay?.status==='PASS' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'">
+      <span class="text-sm font-bold px-3 py-1 rounded-full"
+            :class="qcAuditDay?.status==='PASS' ? 'badge-pass' : 'badge-fail'"
+            x-text="qcAuditDay?.status==='PASS' ? '✓ QC RUN BEFORE PATIENTS' : '✗ QC RUN AFTER PATIENTS'"></span>
+      <span class="text-sm text-gray-700">
+        First QC: <strong x-text="formatTime(qcAuditDay?.first_qc_run)"></strong> &nbsp;|&nbsp;
+        First Patient: <strong x-text="formatTime(qcAuditDay?.first_patient_result)"></strong>
+      </span>
+    </div>
+    <div x-show="qcResults.length===0 && !globalLoading" class="text-center py-8 text-gray-400 text-sm">
+      Select a date and click Load to view QC controls.
+    </div>
+
+    <!-- Summary badges per analyte -->
+    <div x-show="qcResults.length > 0" class="flex flex-wrap gap-2 mb-4">
+      <template x-for="a in qcAnalyteSummary" :key="a.analyte_code">
+        <div class="text-xs px-3 py-1.5 rounded-full font-semibold border"
+             :class="a.worst==='fail' ? 'bg-red-100 text-red-800 border-red-300'
+                   : a.worst==='warn' ? 'bg-amber-100 text-amber-800 border-amber-300'
+                   : 'bg-green-100 text-green-800 border-green-300'">
+          <span x-text="a.analyte_code"></span>
+          <span x-text="a.worst==='fail' ? ' ✗' : a.worst==='warn' ? ' ⚠' : ' ✓'"></span>
+        </div>
+      </template>
+    </div>
+
+    <!-- QC Results Table -->
+    <div x-show="qcResults.length > 0" class="bg-white rounded-xl shadow overflow-hidden mb-6">
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <span class="font-semibold text-gray-700">
+          Controls for <span class="text-blue-700" x-text="qcDate"></span>
+          — <span x-text="qcResults.length"></span> records
+        </span>
+        <span class="text-xs text-gray-400">Z = (Measured − Assigned) ÷ SD</span>
+      </div>
+      <div class="table-wrap print-full">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+            <tr>
+              <th class="text-left px-3 py-2.5">Time</th>
+              <th class="text-left px-3 py-2.5">Analyte</th>
+              <th class="text-left px-3 py-2.5">Control</th>
+              <th class="text-left px-3 py-2.5">Lot</th>
+              <th class="text-right px-3 py-2.5">Assigned</th>
+              <th class="text-right px-3 py-2.5">Measured</th>
+              <th class="text-right px-3 py-2.5">SD</th>
+              <th class="text-right px-3 py-2.5">Z-Score</th>
+              <th class="text-center px-3 py-2.5">Status</th>
+              <th class="text-left px-3 py-2.5">Units</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in qcResults" :key="r.qc_id">
+              <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="px-3 py-2 text-gray-500 text-xs font-mono" x-text="formatTime(r.run_datetime)"></td>
+                <td class="px-3 py-2 font-mono font-bold text-blue-700" x-text="r.analyte_code"></td>
+                <td class="px-3 py-2" x-text="r.control_name"></td>
+                <td class="px-3 py-2 text-gray-500 font-mono text-xs" x-text="r.control_lot"></td>
+                <td class="px-3 py-2 text-right" x-text="fmt3(r.assigned_value)"></td>
+                <td class="px-3 py-2 text-right font-semibold" x-text="fmt3(r.measured_value)"></td>
+                <td class="px-3 py-2 text-right text-gray-500" x-text="fmt3(r.sd)"></td>
+                <td class="px-3 py-2 text-right">
+                  <span class="px-2 py-0.5 rounded text-xs font-bold"
+                        :class="zClass(calcZ(r))"
+                        x-text="calcZ(r) !== null ? calcZ(r).toFixed(2) : 'N/A'"></span>
+                </td>
+                <td class="px-3 py-2 text-center">
+                  <span class="px-2 py-0.5 rounded text-xs font-bold"
+                        :class="zClass(calcZ(r))"
+                        x-text="zLabel(calcZ(r))"></span>
+                </td>
+                <td class="px-3 py-2 text-gray-500 text-xs" x-text="r.units"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Levy-Jennings Chart -->
+    <div x-show="qcResults.length > 0" class="bg-white rounded-xl shadow p-4">
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        <h3 class="font-semibold text-gray-700"><i class="fa-solid fa-chart-line text-blue-500 mr-2"></i>Levy-Jennings Chart</h3>
+        <select x-model="levyAnalyte" @change="loadLevy()"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+          <option value="">— Select analyte —</option>
+          <template x-for="a in uniqueQCAnalytes" :key="a">
+            <option :value="a" x-text="a"></option>
+          </template>
+        </select>
+        <span x-show="levyAnalyte" class="text-xs text-gray-400">Showing full history from archive</span>
+      </div>
+      <div x-show="levyAnalyte" class="chart-box" style="height:300px"><canvas id="levyChart"></canvas></div>
+      <div x-show="!levyAnalyte" class="text-center text-gray-400 text-sm py-8">Select an analyte to view the Levy-Jennings chart.</div>
+    </div>
+  </div><!-- /qc -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 3 — ACTG WORKLOAD & BILLING
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='actg'">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-users text-blue-600 mr-2"></i>ACTG Programme — Workload &amp; Billing</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        <select x-model="actgMonth" @change="recomputeActg()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+          <template x-for="m in actgAvailableMonths" :key="m">
+            <option :value="m" x-text="m"></option>
+          </template>
+        </select>
+        <a href="/actg/export" target="_blank"
+           class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+          <i class="fa-solid fa-file-excel mr-1"></i> Export ACTG Excel
+        </a>
+        <button @click="window.print()" class="border border-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition">
+          <i class="fa-solid fa-print mr-1"></i> Print
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="stat-card border-l-4 border-blue-500">
+        <div class="text-3xl font-bold text-blue-700" x-text="actgSummary.patients"></div>
+        <div class="text-sm text-gray-500 mt-1">Unique Patients</div>
+      </div>
+      <div class="stat-card border-l-4 border-emerald-500">
+        <div class="text-3xl font-bold text-emerald-600" x-text="actgSummary.tests.toLocaleString()"></div>
+        <div class="text-sm text-gray-500 mt-1">Total Tests Performed</div>
+      </div>
+      <div class="stat-card border-l-4 border-purple-500">
+        <div class="text-3xl font-bold text-purple-600" x-text="actgSummary.analytes"></div>
+        <div class="text-sm text-gray-500 mt-1">Analytes Run</div>
+      </div>
+      <div class="stat-card border-l-4 border-amber-500">
+        <div class="text-3xl font-bold text-amber-600" x-text="actgSummary.avg_tests_per_patient"></div>
+        <div class="text-sm text-gray-500 mt-1">Avg Tests / Patient</div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <!-- Per-Analyte Billing Table -->
+      <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 bg-blue-50">
+          <span class="font-semibold text-blue-900"><i class="fa-solid fa-receipt mr-2"></i>Per-Analyte Billing Counts</span>
+          <span class="text-xs text-blue-600 ml-2">— each analyte billed separately</span>
+        </div>
+        <div class="table-wrap print-full">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-100 text-xs uppercase tracking-wider text-gray-600">
+              <tr>
+                <th class="text-left px-4 py-2.5">#</th>
+                <th class="text-left px-4 py-2.5">Analyte Code</th>
+                <th class="text-right px-4 py-2.5">Tests</th>
+                <th class="text-right px-4 py-2.5">% of Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(r, i) in actgAnalyteCounts" :key="r.analyte_code">
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                  <td class="px-4 py-2 text-gray-400 text-xs" x-text="i+1"></td>
+                  <td class="px-4 py-2 font-mono font-bold text-blue-700" x-text="r.analyte_code"></td>
+                  <td class="px-4 py-2 text-right font-semibold" x-text="r.tests"></td>
+                  <td class="px-4 py-2 text-right text-gray-500 text-xs"
+                      x-text="actgSummary.tests>0 ? ((r.tests/actgSummary.tests)*100).toFixed(1)+'%' : '-'"></td>
+                </tr>
+              </template>
+              <tr class="bg-blue-50 font-bold border-t-2 border-blue-200">
+                <td class="px-4 py-2" colspan="2">TOTAL</td>
+                <td class="px-4 py-2 text-right text-blue-800" x-text="actgSummary.tests.toLocaleString()"></td>
+                <td class="px-4 py-2 text-right">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Daily ACTG Breakdown -->
+      <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100">
+          <span class="font-semibold text-gray-700"><i class="fa-solid fa-calendar-days text-blue-500 mr-2"></i>Daily Breakdown — <span x-text="actgMonth"></span></span>
+        </div>
+        <div class="table-wrap print-full">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-100 text-xs uppercase tracking-wider text-gray-600">
+              <tr>
+                <th class="text-left px-4 py-2.5">Date</th>
+                <th class="text-right px-4 py-2.5">Patients</th>
+                <th class="text-right px-4 py-2.5">Tests</th>
+                <th class="text-right px-4 py-2.5">Analytes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in actgDailyBreakdown" :key="r.date">
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                  <td class="px-4 py-2" x-text="r.date"></td>
+                  <td class="px-4 py-2 text-right font-semibold" x-text="r.unique_patients"></td>
+                  <td class="px-4 py-2 text-right text-blue-700 font-semibold" x-text="r.total_tests"></td>
+                  <td class="px-4 py-2 text-right text-gray-500" x-text="r.analytes_count"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTG Patient List -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <span class="font-semibold text-gray-700"><i class="fa-solid fa-id-card text-purple-500 mr-2"></i>Patient Registry — <span x-text="actgMonth"></span></span>
+        <span class="text-xs text-gray-400" x-text="actgPatientMonth.length + ' patients'"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100 text-xs uppercase tracking-wider text-gray-600">
+            <tr>
+              <th class="text-left px-4 py-2.5">Patient ID</th>
+              <th class="text-right px-4 py-2.5">Total Tests</th>
+              <th class="text-right px-4 py-2.5">Analytes</th>
+              <th class="text-left px-4 py-2.5">First Test</th>
+              <th class="text-left px-4 py-2.5">Last Test</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in actgPatientMonth" :key="p.patient_id">
+              <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="px-4 py-2 font-mono font-semibold text-blue-700" x-text="p.patient_id"></td>
+                <td class="px-4 py-2 text-right font-bold" x-text="p.tests"></td>
+                <td class="px-4 py-2 text-right text-gray-500" x-text="p.analytes"></td>
+                <td class="px-4 py-2 text-xs text-gray-500" x-text="p.first"></td>
+                <td class="px-4 py-2 text-xs text-gray-500" x-text="p.last"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /actg -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 4 — CALIBRATIONS
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='cals'">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-sliders text-purple-600 mr-2"></i>Calibration Status</h2>
+      <a href="/calibrations/export" target="_blank"
+         class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+        <i class="fa-solid fa-file-excel mr-1"></i> Export Calibrations
+      </a>
+    </div>
+
+    <!-- Expired / Due Banner -->
+    <div x-show="calExpired.length > 0" class="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+      <strong class="text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-2"></i><span x-text="calExpired.length"></span> analyte(s) with older calibrations (&gt;30 days)</strong>
+      <div class="mt-1 flex flex-wrap gap-2">
+        <template x-for="c in calExpired" :key="c.analyte_code">
+          <span class="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-xs font-mono" x-text="c.analyte_code"></span>
+        </template>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100">
+        <span class="font-semibold text-gray-700">Calibration Summary — All Analytes</span>
+      </div>
+      <div class="table-wrap print-full">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100 text-xs uppercase tracking-wider text-gray-600">
+            <tr>
+              <th class="text-left px-4 py-2.5">Analyte</th>
+              <th class="text-right px-4 py-2.5">Total Cals</th>
+              <th class="text-left px-4 py-2.5">Last Calibration</th>
+              <th class="text-left px-4 py-2.5">Type</th>
+              <th class="text-left px-4 py-2.5">Reagent Lot</th>
+              <th class="text-right px-4 py-2.5">Days Ago</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in calSummary" :key="r.analyte_code">
+              <tr class="border-b border-gray-100 hover:bg-gray-50"
+                  :class="calDaysAgo(r.last_calibration) > 30 ? 'bg-amber-50' : ''">
+                <td class="px-4 py-2 font-mono font-bold text-blue-700" x-text="r.analyte_code"></td>
+                <td class="px-4 py-2 text-right" x-text="r.total_calibrations"></td>
+                <td class="px-4 py-2 text-xs font-mono" x-text="r.last_calibration"></td>
+                <td class="px-4 py-2 text-gray-600 text-xs" x-text="r.calibration_type"></td>
+                <td class="px-4 py-2 font-mono text-xs text-gray-500" x-text="r.reagent_lot"></td>
+                <td class="px-4 py-2 text-right font-semibold"
+                    :class="calDaysAgo(r.last_calibration) > 30 ? 'text-amber-600' : 'text-green-700'"
+                    x-text="calDaysAgo(r.last_calibration) + 'd'"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /cals -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 5 — AUDIT COMPLIANCE
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='audit'">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-clipboard-check text-blue-600 mr-2"></i>Audit Compliance — QC Before Patients</h2>
+      <button @click="window.print()" class="border border-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition no-print">
+        <i class="fa-solid fa-print mr-1"></i> Print Report
+      </button>
+    </div>
+
+    <!-- Compliance summary -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="stat-card border-l-4 border-green-500">
+        <div class="text-3xl font-bold text-green-600" x-text="auditPass"></div>
+        <div class="text-sm text-gray-500 mt-1">Days — QC Before Patients ✓</div>
+      </div>
+      <div class="stat-card border-l-4 border-red-500">
+        <div class="text-3xl font-bold text-red-600" x-text="auditFail"></div>
+        <div class="text-sm text-gray-500 mt-1">Days — QC After Patients ✗</div>
+      </div>
+      <div class="stat-card border-l-4 border-blue-500">
+        <div class="text-3xl font-bold text-blue-600"
+             x-text="auditPass+auditFail > 0 ? ((auditPass/(auditPass+auditFail))*100).toFixed(0)+'%' : 'N/A'"></div>
+        <div class="text-sm text-gray-500 mt-1">Compliance Rate</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100">
+        <span class="font-semibold text-gray-700">Daily QC-Before-Patient Log</span>
+        <span class="text-xs text-gray-400 ml-2">— CQI requirement: QC must be run and accepted before patient testing begins</span>
+      </div>
+      <div class="table-wrap print-full">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100 text-xs uppercase tracking-wider text-gray-600">
+            <tr>
+              <th class="text-left px-4 py-2.5">Date</th>
+              <th class="text-left px-4 py-2.5">First QC Run</th>
+              <th class="text-left px-4 py-2.5">First Patient Result</th>
+              <th class="text-center px-4 py-2.5">Status</th>
+              <th class="text-left px-4 py-2.5">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in auditCompliance" :key="r.date">
+              <tr class="border-b border-gray-100 hover:bg-gray-50"
+                  :class="r.status==='FAIL' ? 'bg-red-50' : ''">
+                <td class="px-4 py-2 font-semibold" x-text="r.date"></td>
+                <td class="px-4 py-2 font-mono text-xs" x-text="r.first_qc_run ? formatTime(r.first_qc_run) : '— No QC recorded'"></td>
+                <td class="px-4 py-2 font-mono text-xs" x-text="r.first_patient_result ? formatTime(r.first_patient_result) : '—'"></td>
+                <td class="px-4 py-2 text-center">
+                  <span class="px-3 py-0.5 rounded-full text-xs font-bold"
+                        :class="r.status==='PASS' ? 'badge-pass' : 'badge-fail'"
+                        x-text="r.status"></span>
+                </td>
+                <td class="px-4 py-2 text-xs text-gray-500"
+                    x-text="!r.first_qc_run ? 'No QC data for this date'
+                           : r.status==='FAIL' ? 'QC run ' + minutesDiff(r.first_qc_run, r.first_patient_result) + ' min AFTER first patient'
+                           : 'QC run ' + minutesDiff(r.first_patient_result, r.first_qc_run) + ' min before first patient'">
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /audit -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 6 — REPORTS & EXPORT
+  ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab==='reports'">
+    <h2 class="text-xl font-bold text-gray-700 mb-4"><i class="fa-solid fa-file-export text-blue-600 mr-2"></i>Reports &amp; Data Export</h2>
+
+    <div class="grid md:grid-cols-2 gap-6">
+
+      <!-- Monthly Report Preview -->
+      <div class="bg-white rounded-xl shadow p-4">
+        <h3 class="font-semibold text-gray-700 mb-3"><i class="fa-solid fa-chart-bar text-blue-500 mr-2"></i>Monthly Report Preview</h3>
+        <div class="flex gap-2 mb-3">
+          <input type="number" x-model="reportYear" min="2020" max="2030" placeholder="Year"
+                 class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 outline-none focus:ring-2 focus:ring-blue-400" />
+          <select x-model="reportMonth"
+                  class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+          <button @click="loadMonthlyReport()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Load</button>
+        </div>
+        <div x-show="monthlyReport" class="text-sm space-y-2">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Period</div>
+              <div class="font-bold text-blue-700" x-text="(monthlyReport?.year||'') + '-' + String(monthlyReport?.month||'').padStart(2,'0')"></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Total Patient Tests</div>
+              <div class="font-bold text-lg" x-text="(monthlyReport?.total_tests||0).toLocaleString()"></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Unique Samples</div>
+              <div class="font-bold text-lg" x-text="monthlyReport?.total_samples||0"></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Working Days</div>
+              <div class="font-bold text-lg text-emerald-600" x-text="monthlyReport?.working_days||0"></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Unique Patients</div>
+              <div class="font-bold text-lg text-purple-600" x-text="monthlyReport?.total_patients||0"></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs text-gray-500">Avg Tests/Day</div>
+              <div class="font-bold text-lg" x-text="monthlyReport?.working_days > 0 ? ((monthlyReport?.total_tests||0)/monthlyReport.working_days).toFixed(0) : 0"></div>
+            </div>
+          </div>
+          <!-- Daily breakdown from monthly report -->
+          <div x-show="monthlyReport?.daily_breakdown?.length" class="mt-3">
+            <div class="text-xs font-semibold text-gray-600 mb-1">Daily Breakdown</div>
+            <div style="max-height:180px;overflow-y:auto">
+              <table class="w-full text-xs">
+                <thead class="bg-gray-100"><tr>
+                  <th class="text-left px-2 py-1.5">Date</th>
+                  <th class="text-right px-2 py-1.5">Samples</th>
+                  <th class="text-right px-2 py-1.5">Patients</th>
+                  <th class="text-right px-2 py-1.5">Tests</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="d in (monthlyReport?.daily_breakdown||[])" :key="d.date">
+                    <tr class="border-b border-gray-100">
+                      <td class="px-2 py-1" x-text="d.date"></td>
+                      <td class="px-2 py-1 text-right" x-text="d.samples"></td>
+                      <td class="px-2 py-1 text-right" x-text="d.patients"></td>
+                      <td class="px-2 py-1 text-right font-semibold text-blue-700" x-text="d.tests"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div x-show="!monthlyReport" class="text-center text-gray-400 text-sm py-4">Select year and month, then click Load.</div>
+      </div>
+
+      <!-- Export Hub -->
+      <div class="bg-white rounded-xl shadow p-4">
+        <h3 class="font-semibold text-gray-700 mb-4"><i class="fa-solid fa-download text-emerald-500 mr-2"></i>Export Data to Excel</h3>
+        <div class="space-y-3">
+          <a href="/qc/export" target="_blank"
+             class="flex items-center justify-between w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-4 py-3 transition">
+            <div><div class="font-semibold text-emerald-900 text-sm">QC Results (All)</div><div class="text-xs text-emerald-600">All quality control run data</div></div>
+            <i class="fa-solid fa-file-excel text-emerald-600 text-xl"></i>
+          </a>
+          <a href="/actg/export" target="_blank"
+             class="flex items-center justify-between w-full bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg px-4 py-3 transition">
+            <div><div class="font-semibold text-blue-900 text-sm">ACTG Patient Results</div><div class="text-xs text-blue-600">All ACTG programme patient tests</div></div>
+            <i class="fa-solid fa-file-excel text-blue-600 text-xl"></i>
+          </a>
+          <a href="/calibrations/export" target="_blank"
+             class="flex items-center justify-between w-full bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg px-4 py-3 transition">
+            <div><div class="font-semibold text-purple-900 text-sm">Calibration Records</div><div class="text-xs text-purple-600">All calibration history and results</div></div>
+            <i class="fa-solid fa-file-excel text-purple-600 text-xl"></i>
+          </a>
+          <a href="/hba1c/export" target="_blank"
+             class="flex items-center justify-between w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg px-4 py-3 transition">
+            <div><div class="font-semibold text-amber-900 text-sm">HbA1c Results</div><div class="text-xs text-amber-600">HbA1c patient and QC data</div></div>
+            <i class="fa-solid fa-file-excel text-amber-600 text-xl"></i>
+          </a>
+          <a href="/reports/export/excel" target="_blank"
+             class="flex items-center justify-between w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 transition">
+            <div><div class="font-semibold text-gray-900 text-sm">Full Lab Report (All Data)</div><div class="text-xs text-gray-500">Combined Patients + QC + Calibrations</div></div>
+            <i class="fa-solid fa-file-excel text-gray-600 text-xl"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Daily Report -->
+    <div class="bg-white rounded-xl shadow p-4 mt-6">
+      <h3 class="font-semibold text-gray-700 mb-3"><i class="fa-solid fa-calendar-day text-blue-500 mr-2"></i>Daily Workload Report</h3>
+      <div class="flex gap-2 mb-4">
+        <input type="date" x-model="reportDate" class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400" />
+        <button @click="loadDailyReport()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Load</button>
+      </div>
+      <div x-show="dailyReport" class="space-y-3">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Patient Tests</div>
+            <div class="font-bold text-lg" x-text="dailyReport?.total_tests||0"></div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Unique Samples</div>
+            <div class="font-bold text-lg" x-text="dailyReport?.unique_samples||0"></div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-xs text-gray-500">QC Runs</div>
+            <div class="font-bold text-lg text-emerald-600" x-text="dailyReport?.qc_runs||0"></div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Calibrations</div>
+            <div class="font-bold text-lg text-purple-600" x-text="dailyReport?.calibrations||0"></div>
+          </div>
+        </div>
+        <!-- Analyte breakdown for billing -->
+        <div x-show="dailyReport?.analyte_breakdown?.length">
+          <div class="text-xs font-semibold text-gray-600 mb-1"><i class="fa-solid fa-receipt mr-1 text-blue-500"></i>Analyte Breakdown (for billing)</div>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="a in (dailyReport?.analyte_breakdown||[])" :key="a.analyte_code">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 text-xs">
+                <span class="font-mono font-bold text-blue-800" x-text="a.analyte_code"></span>
+                <span class="text-blue-600 ml-1" x-text="'×' + a.count"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /reports -->
+
+</main>
+
+<!-- ── JAVASCRIPT ───────────────────────────────────────────── -->
+<script>
+let charts = {};
+
+function dashboard() {
+  return {
+    tab: 'overview',
+    globalLoading: false,
+    currentTime: '',
+
+    tabs: [
+      { id:'overview', label:'Overview',          icon:'fa-solid fa-gauge-high' },
+      { id:'qc',       label:'Daily QC Controls', icon:'fa-solid fa-microscope' },
+      { id:'actg',     label:'ACTG Workload',     icon:'fa-solid fa-users' },
+      { id:'cals',     label:'Calibrations',      icon:'fa-solid fa-sliders' },
+      { id:'audit',    label:'Audit Compliance',  icon:'fa-solid fa-clipboard-check' },
+      { id:'reports',  label:'Reports & Export',  icon:'fa-solid fa-file-export' },
+    ],
+
+    // Overview
+    summary: {},
+    qcStats: [],
+    monthlyWorkload: [],
+
+    // Daily QC
+    qcDate: new Date().toISOString().slice(0,10),
+    qcResults: [],
+    qcAuditDay: null,
+    levyAnalyte: '',
+    levyData: [],
+
+    // ACTG
+    actgAllResults: [],
+    actgAvailableMonths: [],
+    actgMonth: '',
+    actgAnalyteCounts: [],
+    actgDailyBreakdown: [],
+    actgPatientMonth: [],
+    actgSummary: { patients:0, tests:0, analytes:0, avg_tests_per_patient:0 },
+
+    // Audit
+    auditCompliance: [],
+
+    // Calibrations
+    calSummary: [],
+    calExpired: [],
+
+    // Reports
+    reportYear: new Date().getFullYear(),
+    reportMonth: new Date().getMonth() + 1,
+    reportDate: new Date().toISOString().slice(0,10),
+    monthlyReport: null,
+    dailyReport: null,
+
+    // ── INIT ──────────────────────────────────────────────
+    async init() {
+      this.updateClock();
+      setInterval(() => this.updateClock(), 1000);
+      await this.loadOverview();
+    },
+
+    updateClock() {
+      this.currentTime = new Date().toLocaleString('en-ZA', {
+        weekday:'short', day:'2-digit', month:'short', year:'numeric',
+        hour:'2-digit', minute:'2-digit', second:'2-digit'
+      });
+    },
+
+    async switchTab(id) {
+      this.tab = id;
+      await this.$nextTick();
+      if (id === 'qc')     this.renderActivityChart();
+      if (id === 'actg' && !this.actgAllResults.length) await this.loadActg();
+      if (id === 'cals' && !this.calSummary.length)    await this.loadCals();
+      if (id === 'audit' && !this.auditCompliance.length) await this.loadAudit();
+    },
+
+    // ── OVERVIEW ─────────────────────────────────────────
+    async loadOverview() {
+      this.globalLoading = true;
+      try {
+        const [sum, stats, wl] = await Promise.all([
+          api('/dashboard/summary'),
+          api('/qc/statistics'),
+          api('/dashboard/monthly-workload'),
+        ]);
+        this.summary       = sum;
+        this.qcStats       = stats;
+        this.monthlyWorkload = wl;
+        await this.$nextTick();
+        this.renderActivityChart();
+      } finally {
+        this.globalLoading = false;
+      }
+    },
+
+    async renderActivityChart() {
+      const data = await api('/dashboard/activity-summary');
+      const sorted = [...data].sort((a,b)=>a.date.localeCompare(b.date));
+      const labels  = sorted.map(r=>r.date.slice(5));
+      const tests   = sorted.map(r=>r.patient_results);
+      const qcRuns  = sorted.map(r=>r.qc_runs);
+      destroyChart('activityChart');
+      const ctx = document.getElementById('activityChart');
+      if (!ctx) return;
+      charts.activityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label:'Patient Tests', data:tests,  backgroundColor:'rgba(59,130,246,0.7)', borderRadius:3 },
+            { label:'QC Runs',       data:qcRuns, backgroundColor:'rgba(16,185,129,0.7)', borderRadius:3 },
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } },
+          scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:10}} } }
+        }
+      });
+    },
+
+    // ── DAILY QC ─────────────────────────────────────────
+    async loadQCDay() {
+      this.globalLoading = true;
+      this.levyAnalyte = '';
+      try {
+        const [results, auditData] = await Promise.all([
+          api(`/qc/date/${this.qcDate}`),
+          api('/audit/qc-before-patients'),
+        ]);
+        this.qcResults  = results;
+        this.qcAuditDay = auditData.find(r => r.date === this.qcDate) || null;
+      } finally {
+        this.globalLoading = false;
+      }
+    },
+
+    get qcAnalyteSummary() {
+      const map = {};
+      for (const r of this.qcResults) {
+        const z = this.calcZ(r);
+        const level = z === null ? 'ok' : Math.abs(z) >= 3 ? 'fail' : Math.abs(z) >= 2 ? 'warn' : 'ok';
+        if (!map[r.analyte_code] || level === 'fail' || (level === 'warn' && map[r.analyte_code] !== 'fail'))
+          map[r.analyte_code] = level;
+      }
+      return Object.entries(map).map(([analyte_code, worst]) => ({ analyte_code, worst }));
+    },
+
+    get uniqueQCAnalytes() {
+      return [...new Set(this.qcResults.map(r=>r.analyte_code))].sort();
+    },
+
+    async loadLevy() {
+      if (!this.levyAnalyte) return;
+      this.levyData = await api(`/qc/levy-jennings/${this.levyAnalyte}`);
+      await this.$nextTick();
+      this.renderLevyChart();
+    },
+
+    renderLevyChart() {
+      destroyChart('levyChart');
+      const ctx = document.getElementById('levyChart');
+      if (!ctx || !this.levyData.length) return;
+      const sorted = [...this.levyData].sort((a,b)=>a.run_datetime.localeCompare(b.run_datetime));
+      const labels = sorted.map(r=>r.run_datetime.slice(5,16));
+      const zScores = sorted.map(r=>r.z_score);
+      charts.levyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: `Z-Score (${this.levyAnalyte})`,
+              data: zScores,
+              borderColor: 'rgb(59,130,246)', backgroundColor:'rgba(59,130,246,0.1)',
+              tension: 0.1, pointRadius: 5,
+              pointBackgroundColor: zScores.map(z =>
+                Math.abs(z)>=3 ? '#ef4444' : Math.abs(z)>=2 ? '#f59e0b' : '#10b981'
+              ),
+              pointBorderColor: '#fff', pointBorderWidth: 2,
+            },
+            { label:'+3SD', data:sorted.map(()=>3),  borderColor:'rgba(239,68,68,0.7)',  borderDash:[4,4], pointRadius:0, borderWidth:1.5, fill:false },
+            { label:'-3SD', data:sorted.map(()=>-3), borderColor:'rgba(239,68,68,0.7)',  borderDash:[4,4], pointRadius:0, borderWidth:1.5, fill:false },
+            { label:'+2SD', data:sorted.map(()=>2),  borderColor:'rgba(245,158,11,0.7)', borderDash:[4,4], pointRadius:0, borderWidth:1.5, fill:false },
+            { label:'-2SD', data:sorted.map(()=>-2), borderColor:'rgba(245,158,11,0.7)', borderDash:[4,4], pointRadius:0, borderWidth:1.5, fill:false },
+            { label:'Mean', data:sorted.map(()=>0),  borderColor:'rgba(107,114,128,0.5)', borderDash:[2,2], pointRadius:0, borderWidth:1, fill:false },
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } },
+          scales:{
+            y:{ min:-4, max:4, ticks:{ font:{size:10} },
+                grid:{ color: ctx => ctx.tick.value === 0 ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)' } },
+            x:{ ticks:{ font:{size:9}, maxRotation:45 } }
+          }
+        }
+      });
+    },
+
+    // ── ACTG ─────────────────────────────────────────────
+    async loadActg() {
+      this.globalLoading = true;
+      try {
+        this.actgAllResults = await api('/actg');
+        const months = [...new Set(this.actgAllResults.map(r=>r.run_datetime.slice(0,7)))].sort();
+        this.actgAvailableMonths = months;
+        this.actgMonth = months[months.length - 1] || '';
+        this.recomputeActg();
+      } finally {
+        this.globalLoading = false;
+      }
+    },
+
+    recomputeActg() {
+      const m = this.actgMonth;
+      const filtered = this.actgAllResults.filter(r => r.run_datetime.startsWith(m));
+
+      // Analyte counts
+      const acounts = {};
+      filtered.forEach(r => { acounts[r.analyte_code] = (acounts[r.analyte_code]||0)+1; });
+      this.actgAnalyteCounts = Object.entries(acounts)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([analyte_code,tests])=>({analyte_code,tests}));
+
+      // Daily breakdown
+      const byDate = {};
+      filtered.forEach(r => {
+        const d = r.run_datetime.slice(0,10);
+        if (!byDate[d]) byDate[d] = { date:d, pids:new Set(), tests:0, analytes:new Set() };
+        byDate[d].pids.add(r.patient_identifier);
+        byDate[d].tests++;
+        byDate[d].analytes.add(r.analyte_code);
+      });
+      this.actgDailyBreakdown = Object.values(byDate)
+        .sort((a,b)=>a.date.localeCompare(b.date))
+        .map(d=>({ date:d.date, unique_patients:d.pids.size, total_tests:d.tests, analytes_count:d.analytes.size }));
+
+      // Patient registry
+      const byPat = {};
+      filtered.forEach(r => {
+        const pid = r.patient_identifier;
+        if (!byPat[pid]) byPat[pid] = { patient_id:pid, tests:0, analytes:new Set(), times:[] };
+        byPat[pid].tests++;
+        byPat[pid].analytes.add(r.analyte_code);
+        byPat[pid].times.push(r.run_datetime);
+      });
+      this.actgPatientMonth = Object.values(byPat)
+        .sort((a,b)=>b.tests-a.tests)
+        .map(p=>({
+          patient_id: p.patient_id,
+          tests: p.tests,
+          analytes: p.analytes.size,
+          first: p.times.sort()[0].slice(0,16),
+          last:  p.times.sort().at(-1).slice(0,16),
+        }));
+
+      // Summary
+      const pats = new Set(filtered.map(r=>r.patient_identifier)).size;
+      const total = filtered.length;
+      const analytes = new Set(filtered.map(r=>r.analyte_code)).size;
+      this.actgSummary = {
+        patients: pats,
+        tests: total,
+        analytes: analytes,
+        avg_tests_per_patient: pats > 0 ? (total/pats).toFixed(1) : 0,
+      };
+    },
+
+    // ── CALIBRATIONS ──────────────────────────────────────
+    async loadCals() {
+      this.globalLoading = true;
+      try {
+        const [sum, exp] = await Promise.all([
+          api('/calibrations/summary'),
+          api('/calibrations/expired'),
+        ]);
+        this.calSummary = sum;
+        this.calExpired = exp;
+      } finally {
+        this.globalLoading = false;
+      }
+    },
+
+    calDaysAgo(dt) {
+      if (!dt) return 999;
+      const then = new Date(dt.replace(' ','T'));
+      return Math.floor((Date.now() - then.getTime()) / 86400000);
+    },
+
+    // ── AUDIT ─────────────────────────────────────────────
+    async loadAudit() {
+      this.globalLoading = true;
+      try {
+        this.auditCompliance = await api('/audit/qc-before-patients');
+      } finally {
+        this.globalLoading = false;
+      }
+    },
+
+    get auditPass() { return this.auditCompliance.filter(r=>r.status==='PASS').length; },
+    get auditFail() { return this.auditCompliance.filter(r=>r.status==='FAIL').length; },
+
+    // ── REPORTS ───────────────────────────────────────────
+    async loadMonthlyReport() {
+      this.monthlyReport = await api(`/reports/monthly?year=${this.reportYear}&month=${this.reportMonth}`);
+    },
+    async loadDailyReport() {
+      this.dailyReport = await api(`/reports/daily?target_date=${this.reportDate}`);
+    },
+
+    // ── HELPERS ───────────────────────────────────────────
+    calcZ(r) {
+      if (r.sd && r.sd !== 0 && r.assigned_value !== null && r.measured_value !== null)
+        return (r.measured_value - r.assigned_value) / r.sd;
+      return null;
+    },
+    zClass(z) {
+      if (z === null) return 'z-ok';
+      return Math.abs(z) >= 3 ? 'z-fail' : Math.abs(z) >= 2 ? 'z-warn' : 'z-ok';
+    },
+    zLabel(z) {
+      if (z === null) return 'N/A';
+      return Math.abs(z) >= 3 ? '1:3s REJECT' : Math.abs(z) >= 2 ? '1:2s WARN' : 'PASS';
+    },
+    fmt2(v) { return v != null ? Number(v).toFixed(2) : '—'; },
+    fmt3(v) { return v != null ? Number(v).toFixed(3) : '—'; },
+    formatTime(dt) {
+      if (!dt) return '—';
+      return dt.replace('T',' ').slice(0,16);
+    },
+    minutesDiff(a, b) {
+      if (!a || !b) return '?';
+      const diff = Math.abs(new Date(b.replace(' ','T')) - new Date(a.replace(' ','T')));
+      return Math.round(diff / 60000);
+    },
+  };
+}
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`API ${path} → ${r.status}`);
+  return r.json();
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+</script>
+</body>
+</html>
